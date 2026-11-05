@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 0;
+    padding: 16px;
+    background: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color, #000);
+  }
+  .progress { height: 6px; background: #ddd; border-radius: 3px; margin-bottom: 12px; }
+  .progress div { height: 100%; width: 0; background: #2e7d32; border-radius: 3px; transition: width .3s; }
+  .label { font-size: 13px; opacity: .7; }
+  h3 { font-size: 18px; margin: 8px 0 16px; }
+  .opt {
+    display: block; width: 100%; margin: 8px 0; padding: 12px;
+    border: 1px solid #ccc; border-radius: 12px; font-size: 16px;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f2);
+    color: inherit; text-align: left;
+  }
+</style>
+</head>
+<body>
+<div class="progress"><div id="bar"></div></div>
+<div class="label" id="label"></div>
+<h3 id="question"></h3>
+<div id="options"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+const LEVELS = [
+  {
+    name: "Рівень 1: основи",
+    questions: [
+      { q: "Скільки власних карт отримує кожен гравець на початку роздачі в Texas Hold’em?",
+        options: ["5 карт", "3 карти", "2 карти", "4 карти"], correct: 2 },
+      { q: "Яка комбінація є найсильнішою серед покерних комбінацій?",
+        options: ["Фул-хаус", "Роял-флеш", "Стріт-флеш", "Каре"], correct: 1 },
+      { q: "Що означає Fold (фолд) під час роздачі?",
+        options: ["Залишитися в грі без ставки", "Зрівняти ставку", "Підвищити ставку", "Скинути карти та вийти з роздачі"], correct: 3 },
+      { q: "Скільки загалом спільних карт викладається на стіл у Texas Hold’em до завершення роздачі?",
+        options: ["4 карти", "5 карт", "3 карти", "6 карт"], correct: 1 },
+    ],
+    pass: 4,
+  },
+  {
+    name: "Рівень 2: професійний",
+    questions: [
+      { q: "Що означає поняття Range (рендж) у покері?",
+        options: ["Конкретна пара карт суперника", "Кількість фішок у стеку гравця",
+                  "Розмір ставки відносно банку", "Діапазон рук, з якими гравець може виконати певну дію"], correct: 3 },
+      { q: "Що означає термін 3-bet у покері?",
+        options: ["Перша ставка в роздачі (Open Raise)", "Повторне підвищення ставки після рейзу іншого гравця",
+                  "Зрівнювання ставки суперника (Call)", "Ставка розміром у три великі блайнди (3 BB)"], correct: 1 },
+      { q: "Чому на BTN (Button) можна грати більше стартових рук, ніж на ранніх позиціях?",
+        options: ["Тому що BTN частіше отримує сильні карти", "Тому що BTN завжди виграє банк",
+                  "Тому що BTN має позиційну перевагу та більше інформації про дії суперників",
+                  "Тому що BTN не потрібно робити ставки"], correct: 2 },
+    ],
+  },
+];
+
+let level = 0, idx = 0;
+const scores = [0, 0];
+
+const bar = document.getElementById("bar");
+const label = document.getElementById("label");
+const questionEl = document.getElementById("question");
+const optionsEl = document.getElementById("options");
+
+function render() {
+  const L = LEVELS[level];
+  const q = L.questions[idx];
+  const total = LEVELS.reduce((s, l) => s + l.questions.length, 0);
+  const done = (level === 0 ? 0 : LEVELS[0].questions.length) + idx;
+
+  bar.style.width = (done / total * 100) + "%";
+  label.textContent = `${L.name} · питання ${idx + 1} з ${L.questions.length}`;
+  questionEl.textContent = q.q;
+  optionsEl.innerHTML = "";
+
+  q.options.forEach((text, i) => {
+    const btn = document.createElement("button");
+    btn.className = "opt";
+    btn.textContent = text;
+    btn.onclick = () => answer(i);
+    optionsEl.appendChild(btn);
+  });
+}
+
+function answer(i) {
+  const q = LEVELS[level].questions[idx];
+  if (i === q.correct) scores[level]++;
+  idx++;
+
+  if (idx < LEVELS[level].questions.length) {
+    render();
+    return;
+  }
+
+  if (level === 0) {
+    if (scores[0] >= LEVELS[0].pass) {
+      level = 1; idx = 0; render();
+      return;
+    }
+    finish();
+    return;
+  }
+  finish();
+}
+
+function finish() {
+  tg.sendData(JSON.stringify({
+    l1: scores[0],
+    l2: level === 1 ? scores[1] : null,
+  }));
+}
+
+render();
+</script>
+</body>
+</html>
