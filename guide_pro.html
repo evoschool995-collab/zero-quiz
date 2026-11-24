@@ -7,45 +7,107 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   html, body { margin: 0; background: #111; font-family: system-ui, sans-serif; }
-  #pages { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0 100px; }
-  #pages canvas { width: 100%; max-width: 720px; height: auto; background: #fff; }
+  #pages {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 8px 0 100px;
+  }
+  .page {
+    position: relative; width: 100%; max-width: 720px; background: #fff;
+  }
+  .page canvas { width: 100%; height: auto; display: block; }
+  .annotationLayer { position: absolute; inset: 0; }
+  .annotationLayer a {
+    position: absolute; display: block;
+    -webkit-tap-highlight-color: rgba(46, 125, 50, 0.3);
+  }
+  #status { color: #aaa; text-align: center; padding: 20px; }
   .cta {
     position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 14px;
     text-align: center; background: #2e7d32; color: #fff; border-radius: 12px;
-    text-decoration: none; font-size: 16px;
+    text-decoration: none; font-size: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.4);
   }
-  #status { color: #aaa; text-align: center; padding: 20px; }
 </style>
 </head>
 <body>
 <div id="pages"><div id="status">Завантаження гайду…</div></div>
-<a class="cta" href="https://t.me/Evolytsiya_bot?start=guide">Оціни, будь ласка, чи був гайд корисним для тебе</a>
+
+<a class="cta" href="https://t.me/Evolytsiya_bot?start=guide">
+  Оціни, будь ласка, чи був гайд корисним для тебе
+</a>
 
 <script>
-  window.Telegram.WebApp.ready();
-  window.Telegram.WebApp.expand();
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
 
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   const container = document.getElementById("pages");
 
-  pdfjsLib.getDocument("guide_pro.pdf").promise.then(async (pdf) => {
-    container.innerHTML = "";
-    const scale = Math.min(2, window.devicePixelRatio * 1.5);
-    for (let n = 1; n <= pdf.numPages; n++) {
-      const page = await pdf.getPage(n);
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      container.appendChild(canvas);
-      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+  // Відкриває посилання з PDF: зовнішні сайти — через Telegram, t.me — як є
+  function openLink(url, e) {
+    e.preventDefault();
+    if (url.startsWith("https://t.me/") || url.startsWith("tg://")) {
+      tg.openTelegramLink(url);
+    } else {
+      tg.openLink(url);
     }
-  }).catch((e) => {
-    container.innerHTML = '<div id="status">Не вдалося відкрити гайд</div>';
-    console.error(e);
-  });
+  }
+
+  async function renderPage(pdf, n, scale) {
+    const page = await pdf.getPage(n);
+    const viewport = page.getViewport({ scale });
+
+    const wrap = document.createElement("div");
+    wrap.className = "page";
+    wrap.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    wrap.appendChild(canvas);
+
+    const layer = document.createElement("div");
+    layer.className = "annotationLayer";
+    wrap.appendChild(layer);
+
+    container.appendChild(wrap);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+
+    const annotations = await page.getAnnotations();
+    for (const ann of annotations) {
+      if (ann.subtype !== "Link" || !ann.url) continue;
+
+      const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(ann.rect);
+      const left = Math.min(x1, x2), top = Math.min(y1, y2);
+      const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+
+      const a = document.createElement("a");
+      a.href = ann.url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.style.left = `${(left / viewport.width) * 100}%`;
+      a.style.top = `${(top / viewport.height) * 100}%`;
+      a.style.width = `${(w / viewport.width) * 100}%`;
+      a.style.height = `${(h / viewport.height) * 100}%`;
+      a.addEventListener("click", (e) => openLink(ann.url, e));
+      layer.appendChild(a);
+    }
+  }
+
+  pdfjsLib.getDocument("guide_pro.pdf").promise
+    .then(async (pdf) => {
+      container.innerHTML = "";
+      const scale = Math.min(2, window.devicePixelRatio * 1.5);
+      for (let n = 1; n <= pdf.numPages; n++) {
+        await renderPage(pdf, n, scale);
+      }
+    })
+    .catch((e) => {
+      container.innerHTML = '<div id="status">Не вдалося відкрити гайд</div>';
+      console.error(e);
+    });
 </script>
 </body>
 </html>
