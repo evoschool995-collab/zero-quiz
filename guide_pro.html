@@ -4,18 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   html, body { margin: 0; background: #111; font-family: system-ui, sans-serif; }
-  iframe { border: 0; width: 100%; height: 85vh; display: block; }
+  #pages { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0 100px; }
+  #pages canvas { width: 100%; max-width: 720px; height: auto; background: #fff; }
   .cta {
-    display: block; margin: 12px; padding: 14px; text-align: center;
-    background: #2e7d32; color: #fff; border-radius: 12px; text-decoration: none;
+    position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 14px;
+    text-align: center; background: #2e7d32; color: #fff; border-radius: 12px;
+    text-decoration: none; font-size: 16px;
   }
+  #status { color: #aaa; text-align: center; padding: 20px; }
 </style>
 </head>
 <body>
-<iframe src="guide_pro.pdf#view=FitH"></iframe>
+<div id="pages"><div id="status">Завантаження гайду…</div></div>
 <a class="cta" href="https://t.me/Evolytsiya_bot?start=guide">Оціни, будь ласка, чи був гайд корисним для тебе</a>
-<script>window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand();</script>
+
+<script>
+  window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const container = document.getElementById("pages");
+
+  pdfjsLib.getDocument("guide_pro.pdf").promise.then(async (pdf) => {
+    container.innerHTML = "";
+    const scale = Math.min(2, window.devicePixelRatio * 1.5);
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      container.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
+  }).catch((e) => {
+    container.innerHTML = '<div id="status">Не вдалося відкрити гайд</div>';
+    console.error(e);
+  });
+</script>
 </body>
 </html>
